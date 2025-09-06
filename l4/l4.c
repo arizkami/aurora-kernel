@@ -2,8 +2,12 @@
 #include "../include/l4.h"
 #include "../include/ipc.h"
 #include "../include/proc.h"
+#include "../l4_sublayer/include/l4_types.h"
+#include "../l4_sublayer/include/l4_ipc.h"
+#include "../l4_sublayer/include/l4_msg_item.h"
 
 static BOOL g_L4Initialized = FALSE;
+L4_utcb* g_SystemUtcb = NULL;
 
 /* TODO (Capability lifecycle):
  *  - Introduce global registry for reverse lookups during revoke
@@ -17,7 +21,17 @@ static BOOL g_L4Initialized = FALSE;
  */
 
 NTSTATUS L4Initialize(void){
-    g_L4Initialized = TRUE; return STATUS_SUCCESS;
+    /* Initialize the L4 sublayer */
+    g_SystemUtcb = (L4_utcb*)AuroraAllocateMemory(sizeof(L4_utcb));
+    if (!g_SystemUtcb) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    
+    L4UtcbInit(g_SystemUtcb);
+    L4SetUtcb(g_SystemUtcb);
+    
+    g_L4Initialized = TRUE;
+    return STATUS_SUCCESS;
 }
 
 PL4_TCB_EXTENSION L4GetOrCreateTcbExtension(PTHREAD Thread){
@@ -51,7 +65,7 @@ NTSTATUS L4CapInsert(PL4_CAP_TABLE Table, L4_CAP* OutCap, UINT32 Type, UINT32 Ri
             return STATUS_SUCCESS;
         }
     }
-    return STATUS_INSUFFICIENT_RESOURCES;
+    return STATUS_INSUFFICIENT_RESOURCES; /* no free slots */
 }
 
 PVOID L4CapLookup(PL4_CAP_TABLE Table, L4_CAP Cap, UINT32 RequiredRights){
@@ -83,23 +97,74 @@ NTSTATUS L4CapDerive(PL4_CAP_TABLE Table, L4_CAP Source, UINT32 NewRights, L4_CA
 
 NTSTATUS L4IpcSend(PL4_TCB_EXTENSION Sender, PL4_TCB_EXTENSION Receiver, PL4_MSG Msg){
     if(!Sender || !Receiver) return STATUS_INVALID_PARAMETER;
-    AURORA_IRQL old;
-    AuroraAcquireSpinLock(&Receiver->Lock,&old);
-    if(Receiver->Inbox.Length!=0){
+    
+    /* Set up L4 IPC using the sublayer */
+    L4_obj_ref dest = L4ObjRefCreate(Receiver->ThreadId, L4_IPC_SEND);
+    L4_timeout timeout = L4TimeoutNever();
+    
+    /* Convert Aurora message to L4 message registers */
+    if (Msg && Msg->Length > 0) {
+        for (UINT32 i = 0; i < Msg->Length && i < 4; i++) {
+            L4SetMR(i, Msg->MR[i]);
+        }
+    }
+    
+    L4_msg_tag tag = L4MsgTagCreate(Msg ? Msg->Length : 0, 0, 0, L4_PROTO_NONE);
+    L4_error error = L4_IpcSend(dest, timeout, tag);
+    
+    if (L4ErrorIsOk(error)) {
+        /* Legacy compatibility: still update receiver's inbox */
+        AURORA_IRQL old;
+        AuroraAcquireSpinLock(&Receiver->Lock,&old);
+        if(Receiver->Inbox.Length!=0){
+            AuroraReleaseSpinLock(&Receiver->Lock,old);
+            return STATUS_BUFFER_TOO_SMALL;
+        }
+        if(Msg){
+            Receiver->Inbox = *Msg;
+        }
         AuroraReleaseSpinLock(&Receiver->Lock,old);
-        return STATUS_BUFFER_TOO_SMALL; /* mailbox full */
+        return STATUS_SUCCESS;
     }
-    if(Msg){
-        Receiver->Inbox = *Msg; /* copy message registers */
-    }
-    AuroraReleaseSpinLock(&Receiver->Lock,old);
-    return STATUS_SUCCESS;
+    
+    return STATUS_UNSUCCESSFUL;
 }
 
 NTSTATUS L4IpcReceive(PL4_TCB_EXTENSION Receiver, PL4_MSG MsgOut){
     if(!Receiver || !MsgOut) return STATUS_INVALID_PARAMETER;
-    AURORA_IRQL old; AuroraAcquireSpinLock(&Receiver->Lock,&old);
-    if(Receiver->Inbox.Length==0){ AuroraReleaseSpinLock(&Receiver->Lock,old); return STATUS_NO_MORE_ENTRIES; }
+    
+    /* Set up L4 IPC receive using the sublayer */
+    L4_obj_ref from_spec = L4ObjRefCreate(0, L4_IPC_OPEN_WAIT);
+    L4_timeout timeout = L4TimeoutZero(); /* Non-blocking for compatibility */
+    L4_obj_ref sender;
+    
+    L4_msg_tag result_tag = L4_IpcReceive(from_spec, timeout, &sender);
+    
+    if (!L4MsgTagHasError(result_tag)) {
+        /* Convert L4 message registers back to Aurora message */
+        UINT32 words = L4MsgTagGetWords(result_tag);
+        MsgOut->Length = (words > 4) ? 4 : words;
+        
+        for (UINT32 i = 0; i < MsgOut->Length; i++) {
+            MsgOut->MR[i] = L4GetMR(i);
+        }
+        
+        /* Legacy compatibility: clear inbox */
+        AURORA_IRQL old; 
+        AuroraAcquireSpinLock(&Receiver->Lock,&old);
+        Receiver->Inbox.Length = 0;
+        AuroraReleaseSpinLock(&Receiver->Lock,old);
+        
+        return STATUS_SUCCESS;
+    }
+    
+    /* Fallback to legacy implementation for compatibility */
+    AURORA_IRQL old; 
+    AuroraAcquireSpinLock(&Receiver->Lock,&old);
+    if(Receiver->Inbox.Length==0){ 
+        AuroraReleaseSpinLock(&Receiver->Lock,old); 
+        return STATUS_NO_MORE_ENTRIES; 
+    }
     *MsgOut = Receiver->Inbox;
     Receiver->Inbox.Length = 0;
     AuroraReleaseSpinLock(&Receiver->Lock,old);

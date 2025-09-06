@@ -348,7 +348,7 @@ VOID KernSwitchContext(IN PTHREAD OldThread, IN PTHREAD NewThread)
     }
     
     if (NewThread) {
-        KernSetCurrentThread(NewThread);
+        // KernSetCurrentThread(NewThread);
         
         /* Switch address space if different process */
         if (NewThread->ParentProcess && 

@@ -16,8 +16,13 @@
 #include "../aurora.h"
 #include "kern.h" /* for PTHREAD */
 
+/* Include L4 sublayer components */
+#include "../l4_sublayer/include/l4_types.h"
+#include "../l4_sublayer/include/l4_ipc.h"
+#include "../l4_sublayer/include/l4_msg_item.h"
+
 #define L4_MAX_CAPS          256
-#define L4_INVALID_CAP       0xFFFFFFFFu
+#define L4_AURORA_INVALID_CAP       0xFFFFFFFFu
 #define L4_THREAD_CAP_TYPE   1
 #define L4_IPC_RIGHT_SEND    0x1
 #define L4_IPC_RIGHT_RECV    0x2
@@ -67,5 +72,8 @@ NTSTATUS L4CapDerive(PL4_CAP_TABLE Table, L4_CAP Source, UINT32 NewRights, L4_CA
 NTSTATUS L4IpcSend(PL4_TCB_EXTENSION Sender, PL4_TCB_EXTENSION Receiver, PL4_MSG Msg);
 NTSTATUS L4IpcReceive(PL4_TCB_EXTENSION Receiver, PL4_MSG MsgOut);
 PL4_TCB_EXTENSION L4GetOrCreateTcbExtension(PTHREAD Thread);
+
+/* L4 sublayer system UTCB access */
+extern L4_utcb* g_SystemUtcb;
 
 #endif

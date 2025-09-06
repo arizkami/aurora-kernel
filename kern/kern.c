@@ -10,15 +10,15 @@
 static BOOL g_KernelInitialized = FALSE;
 static PROCESS g_ProcessTable[MAX_PROCESSES];
 static THREAD g_ThreadTable[MAX_PROCESSES * MAX_THREADS_PER_PROCESS];
-static SCHEDULER_CONTEXT g_SchedulerContext;
+SCHEDULER_CONTEXT g_SchedulerContext;
 static AURORA_SPINLOCK g_ProcessTableLock;
 static AURORA_SPINLOCK g_ThreadTableLock;
 static PROCESS_ID g_NextProcessId = 1;
 static THREAD_ID g_NextThreadId = 1;
 
 /* Current process and thread (per-CPU) */
-static PPROCESS g_CurrentProcess = NULL;
-static PTHREAD g_CurrentThread = NULL;
+PPROCESS g_CurrentProcess = NULL;
+PTHREAD g_CurrentThread = NULL;
 
 /*
  * Initialize the kernel subsystem

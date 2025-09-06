@@ -14,6 +14,6 @@ void KiSystemStartup(void) {
     extern void StorageDriverInitialize(void); StorageDriverInitialize();
     extern void DisplayDriverInitialize(void); DisplayDriverInitialize();
     extern void AudioDriverInitialize(void); AudioDriverInitialize();
-    extern void HidDriverInitialize(void); HidDriverInitialize();
+    // extern void HidDriverInitialize(void); HidDriverInitialize();
     while(1) { __asm__("hlt"); }
 }

@@ -52,7 +52,7 @@ CFLAGS = -Wall -Wextra -Wno-unused-function -Wno-unused-variable -Wno-unused-par
 CFLAGS += -O2 -ffreestanding -nostdlib -nostdinc -fno-builtin -fno-stack-protector
 CFLAGS += -fno-exceptions -fno-rtti -fno-asynchronous-unwind-tables
 CFLAGS += $(ARCH_CFLAGS)
-CFLAGS += -Iinclude -I/usr/$(CROSS_PREFIX)include -DAURORA_KERNEL=1 -DARCH_$(ARCH)=1
+CFLAGS += -Iinclude -I/usr/$(CROSS_PREFIX)include -I/usr/x86_64-w64-mingw32/include -DAURORA_KERNEL=1 -DARCH_$(ARCH)=1
 
 # Linker flags (PE / image base varies by arch)
 LDFLAGS = -m $(LD_MACHINE) -nostdlib -T kernel.lds
@@ -101,11 +101,17 @@ KERN_SOURCES = $(KERNDIR)/kern.c $(KERNDIR)/scheduler.c $(KERNDIR)/syscall.c $(K
 	$(KERNDIR)/drivers/storage/storage.c \
 	$(KERNDIR)/drivers/display/display.c \
 	$(KERNDIR)/drivers/audio/audio.c \
-	$(KERNDIR)/drivers/hid/hid.c
+	$(KERNDIR)/drivers/hid/hid.c \
+	$(KERNDIR)/drivers/pci/pci.c
 DRIVER_ASM_SOURCES = $(KERNDIR)/drivers/storage/storage_asm.S \
 	$(KERNDIR)/drivers/display/fb_asm.S \
+	$(KERNDIR)/drivers/display/display_asm.S \
 	$(KERNDIR)/drivers/audio/dma.S \
-	$(KERNDIR)/drivers/hid/hid_asm.S
+	$(KERNDIR)/drivers/hid/hidsys.S
+DRIVER_RUST_SOURCES = $(KERNDIR)/drivers/audio/audio_rust.rs \
+	$(KERNDIR)/drivers/display/drm_adapter.rs \
+	$(KERNDIR)/drivers/storage/nvme.rs \
+	$(KERNDIR)/drivers/storage/storage_rust.rs
 ACPI_SOURCES = $(KERNDIR)/acpi.c
 FONT_SOURCES = $(KERNDIR)/font_spleen.c
 KERN_ARCH_SOURCES = $(wildcard $(KERNDIR)/$(ARCH_DIR)/kern_arch.c)
@@ -153,36 +159,43 @@ IPC_SOURCES = $(IPCDIR)/ipc.c
 L4_SOURCES = $(L4DIR)/l4.c
 FIASCO_SOURCES = $(FIASCODIR)/fiasco.c
 
+# L4 Sublayer sources
+L4_SUBLAYER_DIR = l4_sublayer
+L4_SUBLAYER_ABI_SOURCES = $(L4_SUBLAYER_DIR)/abi/l4_types.c $(L4_SUBLAYER_DIR)/abi/l4_msg_item.c
+L4_SUBLAYER_KERN_SOURCES = $(L4_SUBLAYER_DIR)/kern/l4_ipc.c
+
 HAL_SOURCES = $(HALDIR)/hal.c
 HAL_ASM_SOURCES = $(wildcard $(HALDIR)/$(ARCH_DIR)/hal_arch.S)
 
-SOURCES = $(WMI_SOURCES) $(WMI_ARCH_SOURCES) $(KERN_SOURCES) $(ACPI_SOURCES) $(FONT_SOURCES) $(KERN_ARCH_SOURCES) $(FS_SOURCES) $(RTL_SOURCES) $(MEM_SOURCES) $(MEM_ASM_SOURCES) $(PROC_SOURCES) $(PROC_ASM_SOURCES) $(HIVE_SOURCES) $(NTCORE_SOURCES) $(IO_SOURCES) $(HAL_SOURCES) $(HAL_ASM_SOURCES) $(PERF_SOURCES) $(RAW_SOURCES) $(IPC_SOURCES) $(L4_SOURCES) $(FIASCO_SOURCES) $(EXT_FIASCO_SOURCES) $(STUB_SOURCES) $(DRIVER_ASM_SOURCES)
+SOURCES = $(WMI_SOURCES) $(WMI_ARCH_SOURCES) $(KERN_SOURCES) $(ACPI_SOURCES) $(FONT_SOURCES) $(KERN_ARCH_SOURCES) $(FS_SOURCES) $(RTL_SOURCES) $(MEM_SOURCES) $(MEM_ASM_SOURCES) $(PROC_SOURCES) $(PROC_ASM_SOURCES) $(HIVE_SOURCES) $(NTCORE_SOURCES) $(IO_SOURCES) $(HAL_SOURCES) $(HAL_ASM_SOURCES) $(PERF_SOURCES) $(RAW_SOURCES) $(IPC_SOURCES) $(L4_SOURCES) $(FIASCO_SOURCES) $(L4_SUBLAYER_ABI_SOURCES) $(L4_SUBLAYER_KERN_SOURCES) $(EXT_FIASCO_SOURCES) $(STUB_SOURCES) $(DRIVER_ASM_SOURCES) $(DRIVER_RUST_SOURCES)
 
 # Object files
 OBJECTS = $(WMI_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(WMI_ARCH_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(KERN_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(ACPI_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(FONT_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(KERN_ARCH_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(FS_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(RTL_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(MEM_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(MEM_ASM_SOURCES:%.S=$(OBJDIR)/%.o) \
-		  $(PROC_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(PROC_ASM_SOURCES:%.S=$(OBJDIR)/%.o) \
-		  $(HIVE_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(NTCORE_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(IO_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(HAL_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(HAL_ASM_SOURCES:%.S=$(OBJDIR)/%.o) \
-		  $(PERF_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(RAW_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(IPC_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(L4_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(FIASCO_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(STUB_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(DRIVER_ASM_SOURCES:%.S=$(OBJDIR)/%.o)
+	$(WMI_ARCH_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(KERN_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(ACPI_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(FONT_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(KERN_ARCH_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(FS_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(RTL_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(MEM_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(MEM_ASM_SOURCES:%.S=$(OBJDIR)/%.o) \
+	$(PROC_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(PROC_ASM_SOURCES:%.S=$(OBJDIR)/%.o) \
+	$(HIVE_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(NTCORE_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(IO_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(HAL_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(HAL_ASM_SOURCES:%.S=$(OBJDIR)/%.o) \
+	$(PERF_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(RAW_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(IPC_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(L4_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(FIASCO_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(L4_SUBLAYER_ABI_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(L4_SUBLAYER_KERN_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(STUB_SOURCES:%.c=$(OBJDIR)/%.o) \
+	$(DRIVER_ASM_SOURCES:%.S=$(OBJDIR)/%.o)
 
 # All objects including entry point
 ALL_OBJECTS = $(ENTRY_OBJ) $(OBJECTS)
@@ -197,6 +210,12 @@ $(OBJDIR):
 	mkdir -p $(OBJDIR)/$(WMIDIR)/amd64
 	mkdir -p $(OBJDIR)/$(KERNDIR)
 	mkdir -p $(OBJDIR)/$(KERNDIR)/amd64
+	mkdir -p $(OBJDIR)/$(KERNDIR)/drivers
+	mkdir -p $(OBJDIR)/$(KERNDIR)/drivers/audio
+	mkdir -p $(OBJDIR)/$(KERNDIR)/drivers/display
+	mkdir -p $(OBJDIR)/$(KERNDIR)/drivers/hid
+	mkdir -p $(OBJDIR)/$(KERNDIR)/drivers/pci
+	mkdir -p $(OBJDIR)/$(KERNDIR)/drivers/storage
 	mkdir -p $(OBJDIR)/$(FSDIR)
 	mkdir -p $(OBJDIR)/$(RTLDIR)
 	mkdir -p $(OBJDIR)/$(MEMDIR)
@@ -274,9 +293,21 @@ $(OBJDIR)/%.o: %.S | $(OBJDIR)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Compile Rust files (placeholder - requires rustc setup)
+$(OBJDIR)/%.o: %.rs | $(OBJDIR)
+	mkdir -p $(dir $@)
+	@echo "[RUST] Compiling $<"
+	@echo "Note: Rust compilation not yet implemented in build system"
+
 # Clean
 clean:
 	rm -rf $(OBJDIR) $(BINDIR) kernel.lds
+	@echo "[CLEAN] Cleaned build artifacts"
+
+clean-loader:
+	rm -f $(LOADER_EFI) $(LOADER_ELF) $(BINDIR)/loader.so
+	rm -f $(OBJDIR)/efi_loader.o $(OBJDIR)/legacy_loader.o $(OBJDIR)/legacy_boot_asm.o
+	@echo "[CLEAN] Cleaned bootloader artifacts"
 
 # Install debug symbols
 debug: $(TARGET)
@@ -307,6 +338,19 @@ info:
 	@echo "Compiler: $(CC)"
 	@echo "Linker: $(LD)"
 	@echo "Objects: $(words $(ALL_OBJECTS)) files"
+	@echo "EFI Loader: $(LOADER_EFI) (supported: $(EFI_SUPPORTED))"
+	@echo "Legacy Loader: $(LOADER_ELF)"
+	@echo "Architecture: $(ARCH) ($(ARCH_DIR))"
+
+bootloader-info:
+	@echo "[BOOTLOADER] Build configuration:"
+	@echo "  EFI Supported: $(EFI_SUPPORTED)"
+	@echo "  EFI Target: $(EFI_APP_TARGET)"
+	@echo "  EFI Loader: $(LOADER_EFI)"
+	@echo "  Legacy Loader: $(LOADER_ELF)"
+	@echo "  GNU-EFI Dir: $(GNUEFI_DIR)"
+	@echo "  EFI Libraries: $(EFILIB)"
+	@echo "  Legacy Sources: $(LEGACY_SOURCES)"
 
 # ---------------- EFI/Legacy Loader ----------------
 GNUEFI_DIR = external/gnuefi
@@ -342,17 +386,27 @@ loader: $(LOADER_EFI) $(LOADER_ELF)
 
 ifeq ($(EFI_SUPPORTED),1)
 $(LOADER_EFI): $(EFIDIR)/loader.c | $(BINDIR) $(OBJDIR)
-	$(EFICC) -fpic -fshort-wchar -mno-red-zone -DEFI_FUNCTION_WRAPPER $(EFIINC) -c $< -o $(OBJDIR)/efi_loader.o
+	@echo "[EFI] Building EFI loader with enhanced features..."
+	$(EFICC) -fpic -fshort-wchar -mno-red-zone -DEFI_FUNCTION_WRAPPER $(EFIINC) -Iinclude -c $< -o $(OBJDIR)/efi_loader.o
 	$(EFILD) $(EFILDFLAGS) $(OBJDIR)/efi_loader.o $(EFILIB) -o $(BINDIR)/loader.so
 	$(HOST_OBJCOPY) -j .text -j .sdata -j .data -j .dynamic -j .dynsym -j .rel -j .rela -j .rel.* -j .rela.* -j .reloc --target=$(EFI_APP_TARGET) $(BINDIR)/loader.so $@
+	@echo "[EFI] EFI loader built successfully: $@"
 else
 $(LOADER_EFI): | $(BINDIR)
 	@echo "[EFI] Skipping EFI loader build for ARCH=$(ARCH) (unsupported)."
 endif
 
-$(LOADER_ELF): $(LEGACYDIR)/loader.c | $(BINDIR)
-	$(HOST_CC) -ffreestanding -nostdlib -m64 -Wl,-Ttext=0x100000 $< -o $@
+# Legacy bootloader with assembly support
+LEGACY_SOURCES = $(LEGACYDIR)/loader.c $(LEGACYDIR)/boot_asm.S
+LEGACY_OBJECTS = $(OBJDIR)/legacy_loader.o $(OBJDIR)/legacy_boot_asm.o
+
+$(LOADER_ELF): $(LEGACY_SOURCES) | $(BINDIR) $(OBJDIR)
+	@echo "[LEGACY] Building legacy bootloader..."
+	$(HOST_CC) -ffreestanding -nostdlib -m32 -fno-pic -fno-stack-protector -c $(LEGACYDIR)/loader.c -o $(OBJDIR)/legacy_loader.o -Iinclude
+	$(HOST_CC) -ffreestanding -nostdlib -m32 -fno-pic -c $(LEGACYDIR)/boot_asm.S -o $(OBJDIR)/legacy_boot_asm.o
+	$(HOST_CC) -ffreestanding -nostdlib -m32 -fno-pic -Wl,-Ttext=0x7C00 -Wl,--oformat=binary $(OBJDIR)/legacy_boot_asm.o $(OBJDIR)/legacy_loader.o -o $@
+	@echo "[LEGACY] Legacy bootloader built successfully: $@"
 
 .PHONY: loader
 
-.PHONY: all clean debug wmi wmi-amd64 wmi-all kern kern-amd64 kern-all fs info
+.PHONY: all clean clean-loader debug wmi wmi-amd64 wmi-all kern kern-amd64 kern-all fs info bootloader-info loader
