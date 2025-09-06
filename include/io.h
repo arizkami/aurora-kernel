@@ -56,10 +56,57 @@ typedef struct _AIO_DEVICE_OBJECT {
     struct _AIO_DEVICE_OBJECT* Next;
 } AIO_DEVICE_OBJECT, *PAIO_DEVICE_OBJECT;
 
+/* Device type classes (coarse) */
+enum {
+    IO_DEVICE_CLASS_UNSPEC = 0,
+    IO_DEVICE_CLASS_BLOCK,      /* ATA/SATA/SCSI/NVMe/SDCard/virtio-blk */
+    IO_DEVICE_CLASS_CHAR,       /* Serial, basic input */
+    IO_DEVICE_CLASS_HID,        /* Keyboard / mouse / pointer */
+    IO_DEVICE_CLASS_DISPLAY,    /* Framebuffer / GOP */
+    IO_DEVICE_CLASS_AUDIO,      /* Simple PCM output */
+    IO_DEVICE_CLASS_MAX
+};
+
+/* Standard minor types for block */
+enum {
+    IO_BLOCK_TYPE_ATA = 1,
+    IO_BLOCK_TYPE_SATA,
+    IO_BLOCK_TYPE_SCSI,
+    IO_BLOCK_TYPE_NVME,
+    IO_BLOCK_TYPE_SDCARD,
+    IO_BLOCK_TYPE_VIRTIO_BLK
+};
+
+/* HID minor types */
+enum {
+    IO_HID_TYPE_KEYBOARD = 1,
+    IO_HID_TYPE_MOUSE,
+    IO_HID_TYPE_TOUCHPAD
+};
+
+/* Display minor types */
+enum { IO_DISPLAY_TYPE_FB = 1 }; /* raw linear framebuffer */
+
+/* Audio minor types */
+enum { IO_AUDIO_TYPE_PCM = 1 };
+
+/* Registration helpers (stubs) */
+NTSTATUS IoRegisterStorageDriver(void);
+NTSTATUS IoRegisterHidDriver(void);
+NTSTATUS IoRegisterDisplayDriver(void);
+NTSTATUS IoRegisterAudioDriver(void);
+NTSTATUS IoRegisterPosixVfsLayer(void); /* pseudo-driver for POSIX path translation */
+
+/* Block layer API */
+NTSTATUS BlockSubsystemInitialize(void);
+NTSTATUS BlockRead(PAIO_DEVICE_OBJECT Dev, UINT64 Lba, UINT32 Count, PVOID Buffer);
+NTSTATUS BlockWrite(PAIO_DEVICE_OBJECT Dev, UINT64 Lba, UINT32 Count, PVOID Buffer);
+
 /* Registration */
 NTSTATUS IoRegisterDriver(IN PAIO_DRIVER_OBJECT Driver);
 NTSTATUS IoCreateDevice(IN PAIO_DRIVER_OBJECT Driver, IN PCHAR Name, IN UINT32 Type, OUT PAIO_DEVICE_OBJECT* DeviceOut);
 NTSTATUS IoDeleteDevice(IN PAIO_DEVICE_OBJECT Device);
+NTSTATUS IoDriverInitialize(PAIO_DRIVER_OBJECT Driver, const char* Name);
 
 /* IRP lifecycle */
 PAIO_IRP IoAllocateIrp(IN AIO_IRP_MAJOR Major, IN UINT32 Length);

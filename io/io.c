@@ -21,6 +21,8 @@ NTSTATUS IoInitialize(void){
     g_DriverList = NULL;
     g_DeviceList = NULL;
     AuroraDebugPrint("[io] initialized");
+    /* Auto-register core pseudo/layer drivers (POSIX VFS layer first) */
+    IoRegisterPosixVfsLayer();
     return STATUS_SUCCESS;
 }
 
@@ -83,3 +85,29 @@ NTSTATUS IoSubmitIrp(IN PAIO_DEVICE_OBJECT Device, IN PAIO_IRP Irp){
     Irp->Status = drv->Dispatch[Irp->Major](Device, Irp);
     return Irp->Status;
 }
+
+/* --- Driver category stub registrations --- */
+static AIO_DRIVER_OBJECT g_StorageDriver, g_HidDriver, g_DisplayDriver, g_AudioDriver, g_PosixLayer;
+
+NTSTATUS IoRegisterStorageDriver(void){
+    IoDriverInitialize(&g_StorageDriver, "storage");
+    return IoRegisterDriver(&g_StorageDriver);
+}
+NTSTATUS IoRegisterHidDriver(void){
+    IoDriverInitialize(&g_HidDriver, "hid");
+    return IoRegisterDriver(&g_HidDriver);
+}
+NTSTATUS IoRegisterDisplayDriver(void){
+    IoDriverInitialize(&g_DisplayDriver, "display");
+    return IoRegisterDriver(&g_DisplayDriver);
+}
+NTSTATUS IoRegisterAudioDriver(void){
+    IoDriverInitialize(&g_AudioDriver, "audio");
+    return IoRegisterDriver(&g_AudioDriver);
+}
+NTSTATUS IoRegisterPosixVfsLayer(void){
+    IoDriverInitialize(&g_PosixLayer, "posixvfs");
+    /* This layer will later provide path translation /dev,/proc, mount table */
+    return IoRegisterDriver(&g_PosixLayer);
+}
+

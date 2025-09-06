@@ -5,6 +5,17 @@
 
 static BOOL g_L4Initialized = FALSE;
 
+/* TODO (Capability lifecycle):
+ *  - Introduce global registry for reverse lookups during revoke
+ *  - Implement L4CapRevokeAll(Object) to remove object from all tables
+ *  - Implement L4CapDerive(ParentCap, ReducedRights)
+ */
+
+/* TODO (Message extensions):
+ *  - Support extended message descriptors (memory grant/map, strings)
+ *  - Keep small fixed MR fastpath while allowing optional heap-backed extension
+ */
+
 NTSTATUS L4Initialize(void){
     g_L4Initialized = TRUE; return STATUS_SUCCESS;
 }
@@ -49,6 +60,25 @@ PVOID L4CapLookup(PL4_CAP_TABLE Table, L4_CAP Cap, UINT32 RequiredRights){
     if(e->Type==0) return NULL;
     if((e->Rights & RequiredRights) != RequiredRights) return NULL;
     return e->Object;
+}
+
+/* Stub: capability revoke (single cap) */
+NTSTATUS L4CapRevoke(PL4_CAP_TABLE Table, L4_CAP Cap){
+    if(!Table || Cap>=L4_MAX_CAPS) return STATUS_INVALID_PARAMETER;
+    L4_CAP_ENTRY* e = &Table->Entries[Cap];
+    if(e->Type==0) return STATUS_NOT_FOUND;
+    memset(e,0,sizeof(*e));
+    return STATUS_SUCCESS;
+}
+
+/* Stub: derive reduced-rights capability (same object, subset rights) */
+NTSTATUS L4CapDerive(PL4_CAP_TABLE Table, L4_CAP Source, UINT32 NewRights, L4_CAP* Out){
+    if(!Table || !Out) return STATUS_INVALID_PARAMETER;
+    if(Source>=L4_MAX_CAPS) return STATUS_INVALID_PARAMETER;
+    L4_CAP_ENTRY* e = &Table->Entries[Source];
+    if(e->Type==0) return STATUS_NOT_FOUND;
+    if((NewRights & e->Rights) != NewRights) return STATUS_ACCESS_DENIED; /* cannot add rights */
+    return L4CapInsert(Table,Out,e->Type,NewRights,e->Object);
 }
 
 NTSTATUS L4IpcSend(PL4_TCB_EXTENSION Sender, PL4_TCB_EXTENSION Receiver, PL4_MSG Msg){

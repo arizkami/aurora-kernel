@@ -11,6 +11,8 @@
 #include "../include/ipc.h"
 #include "../include/l4.h"
 #include "../include/fiasco.h"
+#include "../include/acpi.h"
+#include "../include/io.h"
 
 /* Global kernel state */
 static BOOL g_KernelInitialized = FALSE;
@@ -58,6 +60,9 @@ NTSTATUS KernInitialize(void)
         return status;
     }
 
+    /* Initialize ACPI early to discover LAPIC/IOAPIC/Timers */
+    AcpiInitialize(); /* ignore failure for now, system can still run with legacy PIC later */
+
     /* Initialize process subsystem */
     status = ProcInitialize();
     if (!NT_SUCCESS(status)) {
@@ -69,6 +74,8 @@ NTSTATUS KernInitialize(void)
     if (!NT_SUCCESS(status)) {
         return status;
     }
+    /* Initialize block storage subsystem (ATA/NVMe stubs) */
+    BlockSubsystemInitialize();
 
     /* Initialize scheduler */
     status = KernInitializeScheduler();
