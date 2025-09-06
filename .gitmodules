@@ -1,3 +1,9 @@
 [submodule "external/gnuefi"]
 	path = external/gnuefi
 	url = https://github.com/mikofure/mikoefi
+[submodule "external/fiasco"]
+	path = external/fiasco
+	url = https://github.com/mikofure/fiasco
+[submodule "external/spleen"]
+	path = external/spleen
+	url = https://github.com/fcambus/spleen
