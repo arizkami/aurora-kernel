@@ -6,6 +6,7 @@
 #include "../../aurora.h"
 #include "../../include/kern.h"
 #include "kern_arch.h"
+#include "../../include/hal.h"
 
 /* Global variables */
 static BOOL g_InterruptsInitialized = FALSE;
@@ -32,6 +33,9 @@ NTSTATUS Amd64InitializeArchitecture(void)
 {
     NTSTATUS status;
     
+    /* Initialize HAL */
+    HalInitialize();
+
     /* Initialize memory management */
     Amd64InitializeMemoryManagement();
     

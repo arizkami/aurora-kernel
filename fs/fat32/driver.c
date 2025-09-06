@@ -1,13 +1,18 @@
-/* FAT32 adapter (stub) */
-#include "../aurora.h"
-#include "../include/kern.h"
-#include "../include/fs.h"
+/* FAT32 driver enhanced stub */
+#include "../../aurora.h"
+#include "../../include/kern.h"
+#include "../../include/fs.h"
+
+typedef struct _FAT32_VOLUME {
+    UINT32 Dummy;
+} FAT32_VOLUME, *PFAT32_VOLUME;
 
 static NTSTATUS fat32_mount(IN PCSTR Device, IN PCSTR Options, OUT PVOID* VolumeCtx)
 {
     UNREFERENCED_PARAMETER(Device);
     UNREFERENCED_PARAMETER(Options);
-    *VolumeCtx = (PVOID)0x1; /* dummy */
+    static FAT32_VOLUME vol = {0};
+    *VolumeCtx = &vol;
     return STATUS_SUCCESS;
 }
 static NTSTATUS fat32_unmount(IN PVOID VolumeCtx)

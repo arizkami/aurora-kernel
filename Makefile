@@ -32,6 +32,17 @@ BOOTDIR = boot
 EFIDIR = $(BOOTDIR)/efi
 LEGACYDIR = $(BOOTDIR)/legacy
 PROCDIR = proc
+IODIR = io
+HALDIR = hal
+PERFDIR = perf
+RAWDIR = raw
+IPCDIR = ipc
+L4DIR = l4
+FIASCODIR = fiasco
+EXT_FIASCO_DIR = external/fiasco/src
+
+# Minimal imported Fiasco sources (future expansion). Initially none compiled to avoid C++ toolchain needs.
+EXT_FIASCO_SOURCES = 
 
 # Target
 TARGET = $(BINDIR)/aurkern.exe
@@ -47,10 +58,15 @@ WMI_ARCH_SOURCES = $(WMIDIR)/amd64/wmi_arch.c
 
 # Kernel Source files
 KERN_SOURCES = $(KERNDIR)/kern.c $(KERNDIR)/scheduler.c $(KERNDIR)/syscall.c $(KERNDIR)/arch_shim.c
+ACPI_SOURCES = $(KERNDIR)/acpi.c
+FONT_SOURCES = $(KERNDIR)/font_spleen.c
 KERN_ARCH_SOURCES = $(KERNDIR)/amd64/kern_arch.c
 
 # File System Source files
-FS_SOURCES = $(FSDIR)/fs.c $(FSDIR)/fat32.c $(FSDIR)/exfat.c $(FSDIR)/ntfs.c
+FS_SOURCES = $(FSDIR)/fs.c \
+			 $(FSDIR)/fat32/driver.c \
+			 $(FSDIR)/exfat/driver.c \
+			 $(FSDIR)/ntfs/driver.c
 
 # Runtime sources
 RTL_SOURCES = $(RTLDIR)/runtime.c $(RTLDIR)/aurora_runtime.c
@@ -76,15 +92,27 @@ HIVE_SOURCES = $(HIVEDIR)/hivebin.c $(HIVEDIR)/hivecell.c $(HIVEDIR)/hivechek.c 
 			   $(HIVEDIR)/hivesync.c $(HIVEDIR)/hivelock.c $(HIVEDIR)/hiveops.c
 
 # NTCore API sources
-NTCORE_SOURCES = $(NTCOREDIR)/api.c
+NTCORE_SOURCES = $(NTCOREDIR)/api.c $(NTCOREDIR)/pe.c
 
 # All source files (excluding entry point)
-SOURCES = $(WMI_SOURCES) $(WMI_ARCH_SOURCES) $(KERN_SOURCES) $(KERN_ARCH_SOURCES) $(FS_SOURCES) $(RTL_SOURCES) $(MEM_SOURCES) $(MEM_ASM_SOURCES) $(PROC_SOURCES) $(PROC_ASM_SOURCES) $(HIVE_SOURCES) $(NTCORE_SOURCES)
+IO_SOURCES = $(IODIR)/io.c $(IODIR)/driver.c $(IODIR)/device.c $(IODIR)/irp.c $(IODIR)/pnp/pnp.c
+PERF_SOURCES = $(PERFDIR)/perf.c
+RAW_SOURCES = $(RAWDIR)/raw.c
+IPC_SOURCES = $(IPCDIR)/ipc.c
+L4_SOURCES = $(L4DIR)/l4.c
+FIASCO_SOURCES = $(FIASCODIR)/fiasco.c
+
+HAL_SOURCES = $(HALDIR)/hal.c
+HAL_ASM_SOURCES = $(HALDIR)/amd64/hal_arch.S
+
+SOURCES = $(WMI_SOURCES) $(WMI_ARCH_SOURCES) $(KERN_SOURCES) $(ACPI_SOURCES) $(FONT_SOURCES) $(KERN_ARCH_SOURCES) $(FS_SOURCES) $(RTL_SOURCES) $(MEM_SOURCES) $(MEM_ASM_SOURCES) $(PROC_SOURCES) $(PROC_ASM_SOURCES) $(HIVE_SOURCES) $(NTCORE_SOURCES) $(IO_SOURCES) $(HAL_SOURCES) $(HAL_ASM_SOURCES) $(PERF_SOURCES) $(RAW_SOURCES) $(IPC_SOURCES) $(L4_SOURCES) $(FIASCO_SOURCES) $(EXT_FIASCO_SOURCES)
 
 # Object files
 OBJECTS = $(WMI_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(WMI_ARCH_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(KERN_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(ACPI_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(FONT_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(KERN_ARCH_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(FS_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(RTL_SOURCES:%.c=$(OBJDIR)/%.o) \
@@ -93,7 +121,15 @@ OBJECTS = $(WMI_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(PROC_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(PROC_ASM_SOURCES:%.S=$(OBJDIR)/%.o) \
 		  $(HIVE_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(NTCORE_SOURCES:%.c=$(OBJDIR)/%.o)
+		  $(NTCORE_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(IO_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(HAL_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(HAL_ASM_SOURCES:%.S=$(OBJDIR)/%.o) \
+		  $(PERF_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(RAW_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(IPC_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(L4_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(FIASCO_SOURCES:%.c=$(OBJDIR)/%.o)
 
 # All objects including entry point
 ALL_OBJECTS = $(ENTRY_OBJ) $(OBJECTS)
@@ -117,9 +153,27 @@ $(OBJDIR):
 	mkdir -p $(OBJDIR)/$(CONFIGDIR)
 	mkdir -p $(OBJDIR)/$(HIVEDIR)
 	mkdir -p $(OBJDIR)/$(NTCOREDIR)
+	mkdir -p $(OBJDIR)/$(IODIR)
+	mkdir -p $(OBJDIR)/$(IODIR)/pnp
+	mkdir -p $(OBJDIR)/$(HALDIR)
+	mkdir -p $(OBJDIR)/$(HALDIR)/amd64
+	mkdir -p $(OBJDIR)/$(PERFDIR)
+	mkdir -p $(OBJDIR)/$(RAWDIR)
+	mkdir -p $(OBJDIR)/$(IPCDIR)
+	mkdir -p $(OBJDIR)/$(L4DIR)
+	mkdir -p $(OBJDIR)/$(FIASCODIR)
 
 $(BINDIR):
 	mkdir -p $(BINDIR)
+
+# Auto-generate Spleen font C source (primary: BDF; fallback: ASM)
+$(KERNDIR)/font_spleen.c: external/spleen/spleen-8x16.bdf external/spleen/dos/spleen.asm tools/gen_spleen.py
+	@if command -v python3 >/dev/null 2>&1; then \
+	  echo "[GEN] Spleen font (BDF)"; \
+	  python3 tools/gen_spleen.py external/spleen/spleen-8x16.bdf $@ external/spleen/dos/spleen.asm; \
+	else \
+	  echo "python3 not found; using existing font_spleen.c"; \
+	fi
 
 # Create kernel linker script if it doesn't exist
 kernel.lds:

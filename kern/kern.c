@@ -7,6 +7,10 @@
 #include "../include/kern.h"
 #include "../include/mem.h"
 #include "../include/proc.h"
+#include "../include/perf.h"
+#include "../include/ipc.h"
+#include "../include/l4.h"
+#include "../include/fiasco.h"
 
 /* Global kernel state */
 static BOOL g_KernelInitialized = FALSE;
@@ -60,11 +64,26 @@ NTSTATUS KernInitialize(void)
         return status;
     }
 
+    /* Initialize I/O manager */
+    status = IoInitialize();
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
     /* Initialize scheduler */
     status = KernInitializeScheduler();
     if (!NT_SUCCESS(status)) {
         return status;
     }
+
+    /* Initialize performance counters */
+    PerfInitialize();
+    /* Initialize IPC */
+    IpcInitialize();
+    /* Initialize L4 adaptation */
+    L4Initialize();
+    /* Initialize Fiasco subsystem (policies/fastpaths) */
+    FiascoInitialize();
 
     g_KernelInitialized = TRUE;
     KernDebugPrint("Aurora Kernel initialized successfully\n");
@@ -292,6 +311,14 @@ NTSTATUS KernCreateThread(
     AuroraReleaseSpinLock(&process->ProcessLock, oldIrql);
 
     *ThreadId = thread->ThreadId;
+    /* L4: create TCB extension and self capability */
+    do {
+        PL4_TCB_EXTENSION ext = L4GetOrCreateTcbExtension(thread);
+        if(ext && ext->CapTable){
+            L4_CAP selfCap; /* ignore status for now */
+            L4CapInsert(ext->CapTable,&selfCap,L4_THREAD_CAP_TYPE, L4_IPC_RIGHT_SEND|L4_IPC_RIGHT_RECV, thread);
+        }
+    } while(0);
     
     AuroraReleaseSpinLock(&g_ThreadTableLock, oldIrql);
     
@@ -326,6 +353,15 @@ NTSTATUS KernTerminateThread(
     if (thread->KernelStack) {
         KernFreeMemory(thread->KernelStack);
         thread->KernelStack = NULL;
+    }
+    /* Free L4 extension if present */
+    if(thread->Extension){
+        PL4_TCB_EXTENSION ext = (PL4_TCB_EXTENSION)thread->Extension;
+        if(ext->CapTable){
+            KernFreeMemory(ext->CapTable);
+        }
+        KernFreeMemory(ext);
+        thread->Extension = NULL;
     }
 
     AuroraReleaseSpinLock(&thread->ThreadLock, oldIrql);

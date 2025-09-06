@@ -1,13 +1,16 @@
-/* exFAT adapter (stub) */
-#include "../aurora.h"
-#include "../include/kern.h"
-#include "../include/fs.h"
+/* exFAT driver enhanced stub */
+#include "../../aurora.h"
+#include "../../include/kern.h"
+#include "../../include/fs.h"
+
+typedef struct _EXFAT_VOLUME { UINT32 Dummy; } EXFAT_VOLUME, *PEXFAT_VOLUME;
 
 static NTSTATUS exfat_mount(IN PCSTR Device, IN PCSTR Options, OUT PVOID* VolumeCtx)
 {
     UNREFERENCED_PARAMETER(Device);
     UNREFERENCED_PARAMETER(Options);
-    *VolumeCtx = (PVOID)0x2; /* dummy */
+    static EXFAT_VOLUME vol = {0};
+    *VolumeCtx = &vol;
     return STATUS_SUCCESS;
 }
 static NTSTATUS exfat_unmount(IN PVOID VolumeCtx)

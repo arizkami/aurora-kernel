@@ -151,6 +151,14 @@ typedef struct _THREAD {
     
     /* Thread-local storage */
     PVOID TlsData;
+
+    /* IPC wait list (simple singly-linked queue for senders) */
+    struct _THREAD* IpcWaitNext;
+    struct _THREAD* IpcWaitHead; /* only valid for receiver mailbox owners */
+    UINT32 IpcWaitCount;
+
+    /* Optional extensions (e.g., L4 TCB extension) */
+    PVOID Extension;
 } THREAD, *PTHREAD;
 
 /* Process Control Block */

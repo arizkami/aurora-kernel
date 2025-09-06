@@ -125,6 +125,7 @@ typedef UINT32 NTSTATUS;
 #define STATUS_BUFFER_TOO_SMALL         0xC0000023
 #define STATUS_OBJECT_NAME_COLLISION    0xC0000035
 #define STATUS_NOT_FOUND                0xC0000225
+#define STATUS_INVALID_IMAGE_FORMAT     0xC000007B
 
 #define NT_SUCCESS(Status) ((NTSTATUS)(Status) == STATUS_SUCCESS)
 
@@ -350,6 +351,9 @@ void AuroraReleaseSpinLock(IN PAURORA_SPINLOCK SpinLock, IN AURORA_IRQL OldIrql)
 NTSTATUS AuroraInitializeSpinLock(OUT PAURORA_SPINLOCK SpinLock);
 NTSTATUS AuroraInitializeEvent(OUT PAURORA_EVENT Event, IN BOOL ManualReset, IN BOOL InitialState);
 
+/* I/O Manager */
+NTSTATUS IoInitialize(void);
+
 
 /* Utility Macros */
 #define AURORA_SUCCESS(Status) ((Status) == STATUS_SUCCESS)
@@ -365,6 +369,12 @@ NTSTATUS AuroraInitializeEvent(OUT PAURORA_EVENT Event, IN BOOL ManualReset, IN 
     #include "wmi/x86/wmi_arch.h"
 #elif defined(AURORA_ARCH_AARCH64)
     #include "wmi/aarch64/wmi_arch.h"
+#endif
+
+#ifdef __has_include
+#if __has_include(<stdarg.h>)
+#include <stdarg.h>
+#endif
 #endif
 
 #endif /* _AURORA_H_ */
