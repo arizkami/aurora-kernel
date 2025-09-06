@@ -6,7 +6,6 @@
 #include "../../aurora.h"
 #include "../../include/kern.h"
 #include "kern_arch.h"
-#include "../../include/hal.h"
 
 /* Global variables */
 static BOOL g_InterruptsInitialized = FALSE;
@@ -33,9 +32,6 @@ NTSTATUS Amd64InitializeArchitecture(void)
 {
     NTSTATUS status;
     
-    /* Initialize HAL */
-    HalInitialize();
-
     /* Initialize memory management */
     Amd64InitializeMemoryManagement();
     
@@ -117,10 +113,13 @@ VOID Amd64RestoreContext(IN PTHREAD Thread)
         "movq %4, %%rsi\n"
         "movq %5, %%rdi\n"
         "movq %6, %%rbp\n"
-        /* Provide Arch* aliases expected by higher layers */
-        #define ArchSaveContext Amd64SaveContext
-        #define ArchRestoreContext Amd64RestoreContext
-        #define ArchInitializeThreadContext Amd64InitializeThreadContext
+        "movq %7, %%rsp\n"
+        "movq %8, %%r8\n"
+        "movq %9, %%r9\n"
+        "movq %10, %%r10\n"
+        "movq %11, %%r11\n"
+        "movq %12, %%r12\n"
+        "movq %13, %%r13\n"
         "movq %14, %%r14\n"
         "movq %15, %%r15\n"
         :
@@ -342,7 +341,7 @@ VOID Amd64TimerInterruptHandler(void)
 /*
  * Context Switching
  */
-VOID Amd64SwitchContext(IN PTHREAD OldThread, IN PTHREAD NewThread)
+VOID KernSwitchContext(IN PTHREAD OldThread, IN PTHREAD NewThread)
 {
     if (OldThread) {
         Amd64SaveContext(OldThread);

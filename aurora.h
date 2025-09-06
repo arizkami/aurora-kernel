@@ -19,6 +19,7 @@ typedef signed long long    int64_t;
 typedef uint64_t            size_t;
 typedef uint64_t            uintptr_t;
 typedef int64_t             ptrdiff_t;
+typedef int64_t             ssize_t; /* added for driver read/write */
 typedef unsigned short      wchar_t;
 
 /* Boolean type */
@@ -89,6 +90,7 @@ typedef int64_t     INT64;
 typedef void*       PVOID;
 typedef char        CHAR;
 typedef char*       PCHAR;
+typedef const char* PCSTR; /* Added for VFS & driver interfaces */
 typedef wchar_t*    PWCHAR;
 typedef UINT32*     PUINT32;
 typedef UINT64*     PUINT64;

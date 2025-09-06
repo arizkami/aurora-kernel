@@ -5,35 +5,20 @@
 
 #include "../aurora.h"
 #include "../include/kern.h"
-#include "../include/mem.h"
-#include "../include/proc.h"
-#include "../include/perf.h"
-#include "../include/ipc.h"
-#include "../include/l4.h"
-#include "../include/fiasco.h"
-#include "../include/acpi.h"
-#include "../include/io.h"
 
 /* Global kernel state */
 static BOOL g_KernelInitialized = FALSE;
 static PROCESS g_ProcessTable[MAX_PROCESSES];
 static THREAD g_ThreadTable[MAX_PROCESSES * MAX_THREADS_PER_PROCESS];
-SCHEDULER_CONTEXT g_SchedulerContext; /* exported */
+static SCHEDULER_CONTEXT g_SchedulerContext;
 static AURORA_SPINLOCK g_ProcessTableLock;
 static AURORA_SPINLOCK g_ThreadTableLock;
 static PROCESS_ID g_NextProcessId = 1;
 static THREAD_ID g_NextThreadId = 1;
 
 /* Current process and thread (per-CPU) */
-PPROCESS g_CurrentProcess = NULL; /* exported */
-PTHREAD g_CurrentThread = NULL;   /* exported */
-
-/* Setter used by arch layer */
-VOID KernSetCurrentThread(PTHREAD Thread)
-{
-    g_CurrentThread = Thread;
-    g_CurrentProcess = Thread ? Thread->ParentProcess : NULL;
-}
+static PPROCESS g_CurrentProcess = NULL;
+static PTHREAD g_CurrentThread = NULL;
 
 /*
  * Initialize the kernel subsystem
@@ -54,43 +39,11 @@ NTSTATUS KernInitialize(void)
     memset(g_ThreadTable, 0, sizeof(g_ThreadTable));
     memset(&g_SchedulerContext, 0, sizeof(g_SchedulerContext));
 
-    /* Initialize memory manager */
-    NTSTATUS status = MemInitialize();
-    if (!NT_SUCCESS(status)) {
-        return status;
-    }
-
-    /* Initialize ACPI early to discover LAPIC/IOAPIC/Timers */
-    AcpiInitialize(); /* ignore failure for now, system can still run with legacy PIC later */
-
-    /* Initialize process subsystem */
-    status = ProcInitialize();
-    if (!NT_SUCCESS(status)) {
-        return status;
-    }
-
-    /* Initialize I/O manager */
-    status = IoInitialize();
-    if (!NT_SUCCESS(status)) {
-        return status;
-    }
-    /* Initialize block storage subsystem (ATA/NVMe stubs) */
-    BlockSubsystemInitialize();
-
     /* Initialize scheduler */
-    status = KernInitializeScheduler();
+    NTSTATUS status = KernInitializeScheduler();
     if (!NT_SUCCESS(status)) {
         return status;
     }
-
-    /* Initialize performance counters */
-    PerfInitialize();
-    /* Initialize IPC */
-    IpcInitialize();
-    /* Initialize L4 adaptation */
-    L4Initialize();
-    /* Initialize Fiasco subsystem (policies/fastpaths) */
-    FiascoInitialize();
 
     g_KernelInitialized = TRUE;
     KernDebugPrint("Aurora Kernel initialized successfully\n");
@@ -165,13 +118,6 @@ NTSTATUS KernCreateProcess(
     process->CreationTime = AuroraGetSystemTime();
     
     AuroraInitializeSpinLock(&process->ProcessLock);
-
-    /* Setup address space for the process */
-    NTSTATUS asStatus = ProcSetupAddressSpace(process);
-    if (!NT_SUCCESS(asStatus)) {
-        AuroraReleaseSpinLock(&g_ProcessTableLock, oldIrql);
-        return asStatus;
-    }
 
     *ProcessId = process->ProcessId;
     
@@ -293,7 +239,7 @@ NTSTATUS KernCreateThread(
     thread->ParentProcess = process;
     
     /* Allocate kernel stack */
-    thread->KernelStack = KernAllocateMemory(KERNEL_STACK_SIZE);
+    thread->KernelStack = AuroraAllocatePool(KERNEL_STACK_SIZE);
     if (!thread->KernelStack) {
         AuroraReleaseSpinLock(&g_ThreadTableLock, oldIrql);
         return STATUS_INSUFFICIENT_RESOURCES;
@@ -318,14 +264,6 @@ NTSTATUS KernCreateThread(
     AuroraReleaseSpinLock(&process->ProcessLock, oldIrql);
 
     *ThreadId = thread->ThreadId;
-    /* L4: create TCB extension and self capability */
-    do {
-        PL4_TCB_EXTENSION ext = L4GetOrCreateTcbExtension(thread);
-        if(ext && ext->CapTable){
-            L4_CAP selfCap; /* ignore status for now */
-            L4CapInsert(ext->CapTable,&selfCap,L4_THREAD_CAP_TYPE, L4_IPC_RIGHT_SEND|L4_IPC_RIGHT_RECV, thread);
-        }
-    } while(0);
     
     AuroraReleaseSpinLock(&g_ThreadTableLock, oldIrql);
     
@@ -358,17 +296,8 @@ NTSTATUS KernTerminateThread(
 
     /* Free kernel stack */
     if (thread->KernelStack) {
-        KernFreeMemory(thread->KernelStack);
+        AuroraFreePool(thread->KernelStack);
         thread->KernelStack = NULL;
-    }
-    /* Free L4 extension if present */
-    if(thread->Extension){
-        PL4_TCB_EXTENSION ext = (PL4_TCB_EXTENSION)thread->Extension;
-        if(ext->CapTable){
-            KernFreeMemory(ext->CapTable);
-        }
-        KernFreeMemory(ext);
-        thread->Extension = NULL;
     }
 
     AuroraReleaseSpinLock(&thread->ThreadLock, oldIrql);
@@ -404,35 +333,26 @@ PTHREAD KernGetCurrentThread(void)
 }
 
 /*
- * Switch context between threads
- */
-VOID KernSwitchContext(IN PTHREAD OldThread, IN PTHREAD NewThread)
-{
-#if defined(_M_X64) || defined(__x86_64__)
-    extern VOID Amd64SwitchContext(IN PTHREAD OldThread, IN PTHREAD NewThread);
-    Amd64SwitchContext(OldThread, NewThread);
-#elif defined(_M_ARM64) || defined(__aarch64__)
-    extern VOID Aarch64SwitchContext(IN PTHREAD OldThread, IN PTHREAD NewThread);
-    Aarch64SwitchContext(OldThread, NewThread);
-#elif defined(_M_IX86) || defined(__i386__)
-    extern VOID X86SwitchContext(IN PTHREAD OldThread, IN PTHREAD NewThread);
-    X86SwitchContext(OldThread, NewThread);
-#else
-#error "Unsupported architecture"
-#endif
-}
-
-/*
  * Memory Management Functions
  */
 PVOID KernAllocateMemory(IN SIZE_T Size)
 {
-    return MemAlloc((size_t)Size);
+    /* Simple memory allocation implementation */
+    /* In a real kernel, this would use a proper memory allocator */
+    
+    /* For now, return NULL to indicate allocation failure */
+    /* This should be replaced with actual memory allocation */
+    return NULL;
 }
 
 VOID KernFreeMemory(IN PVOID Memory)
 {
-    if (Memory) MemFree(Memory);
+    /* Simple memory deallocation implementation */
+    /* In a real kernel, this would free the allocated memory */
+    
+    if (Memory) {
+        /* Placeholder - actual deallocation would happen here */
+    }
 }
 
 /*

@@ -97,7 +97,15 @@ WMI_SOURCES = $(WMIDIR)/wmi.c $(WMIDIR)/wmi_provider.c
 WMI_ARCH_SOURCES = $(WMIDIR)/amd64/wmi_arch.c
 
 # Kernel Source files
-KERN_SOURCES = $(KERNDIR)/kern.c $(KERNDIR)/scheduler.c $(KERNDIR)/syscall.c $(KERNDIR)/arch_shim.c
+KERN_SOURCES = $(KERNDIR)/kern.c $(KERNDIR)/scheduler.c $(KERNDIR)/syscall.c $(KERNDIR)/arch_shim.c $(KERNDIR)/driver_core.c \
+	$(KERNDIR)/drivers/storage/storage.c \
+	$(KERNDIR)/drivers/display/display.c \
+	$(KERNDIR)/drivers/audio/audio.c \
+	$(KERNDIR)/drivers/hid/hid.c
+DRIVER_ASM_SOURCES = $(KERNDIR)/drivers/storage/storage_asm.S \
+	$(KERNDIR)/drivers/display/fb_asm.S \
+	$(KERNDIR)/drivers/audio/dma.S \
+	$(KERNDIR)/drivers/hid/hid_asm.S
 ACPI_SOURCES = $(KERNDIR)/acpi.c
 FONT_SOURCES = $(KERNDIR)/font_spleen.c
 KERN_ARCH_SOURCES = $(wildcard $(KERNDIR)/$(ARCH_DIR)/kern_arch.c)
@@ -136,6 +144,9 @@ NTCORE_SOURCES = $(NTCOREDIR)/api.c $(NTCOREDIR)/pe.c
 
 # All source files (excluding entry point)
 IO_SOURCES = $(IODIR)/io.c $(IODIR)/driver.c $(IODIR)/device.c $(IODIR)/irp.c $(IODIR)/pnp/pnp.c $(IODIR)/block.c $(IODIR)/fb.c
+FSTUBDIR = fstub
+SYSTUBDIR = systub
+STUB_SOURCES = $(FSTUBDIR)/fstub.c $(SYSTUBDIR)/systub.c
 PERF_SOURCES = $(PERFDIR)/perf.c
 RAW_SOURCES = $(RAWDIR)/raw.c
 IPC_SOURCES = $(IPCDIR)/ipc.c
@@ -145,7 +156,7 @@ FIASCO_SOURCES = $(FIASCODIR)/fiasco.c
 HAL_SOURCES = $(HALDIR)/hal.c
 HAL_ASM_SOURCES = $(wildcard $(HALDIR)/$(ARCH_DIR)/hal_arch.S)
 
-SOURCES = $(WMI_SOURCES) $(WMI_ARCH_SOURCES) $(KERN_SOURCES) $(ACPI_SOURCES) $(FONT_SOURCES) $(KERN_ARCH_SOURCES) $(FS_SOURCES) $(RTL_SOURCES) $(MEM_SOURCES) $(MEM_ASM_SOURCES) $(PROC_SOURCES) $(PROC_ASM_SOURCES) $(HIVE_SOURCES) $(NTCORE_SOURCES) $(IO_SOURCES) $(HAL_SOURCES) $(HAL_ASM_SOURCES) $(PERF_SOURCES) $(RAW_SOURCES) $(IPC_SOURCES) $(L4_SOURCES) $(FIASCO_SOURCES) $(EXT_FIASCO_SOURCES)
+SOURCES = $(WMI_SOURCES) $(WMI_ARCH_SOURCES) $(KERN_SOURCES) $(ACPI_SOURCES) $(FONT_SOURCES) $(KERN_ARCH_SOURCES) $(FS_SOURCES) $(RTL_SOURCES) $(MEM_SOURCES) $(MEM_ASM_SOURCES) $(PROC_SOURCES) $(PROC_ASM_SOURCES) $(HIVE_SOURCES) $(NTCORE_SOURCES) $(IO_SOURCES) $(HAL_SOURCES) $(HAL_ASM_SOURCES) $(PERF_SOURCES) $(RAW_SOURCES) $(IPC_SOURCES) $(L4_SOURCES) $(FIASCO_SOURCES) $(EXT_FIASCO_SOURCES) $(STUB_SOURCES) $(DRIVER_ASM_SOURCES)
 
 # Object files
 OBJECTS = $(WMI_SOURCES:%.c=$(OBJDIR)/%.o) \
@@ -169,7 +180,9 @@ OBJECTS = $(WMI_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(RAW_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(IPC_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(L4_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(FIASCO_SOURCES:%.c=$(OBJDIR)/%.o)
+		  $(FIASCO_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(STUB_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(DRIVER_ASM_SOURCES:%.S=$(OBJDIR)/%.o)
 
 # All objects including entry point
 ALL_OBJECTS = $(ENTRY_OBJ) $(OBJECTS)
@@ -202,6 +215,8 @@ $(OBJDIR):
 	mkdir -p $(OBJDIR)/$(IPCDIR)
 	mkdir -p $(OBJDIR)/$(L4DIR)
 	mkdir -p $(OBJDIR)/$(FIASCODIR)
+	mkdir -p $(OBJDIR)/$(FSTUBDIR)
+	mkdir -p $(OBJDIR)/$(SYSTUBDIR)
 
 $(BINDIR):
 	mkdir -p $(BINDIR)
