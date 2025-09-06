@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install mingw-w64 toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 make
+      - name: Build kernel
+        run: |
+          make all
+      - name: Archive kernel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurkern-ubuntu
+          path: bin/aurkern.exe
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install MSYS2 and MinGW-w64
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-x86_64-gcc
+            make
+      - name: Build kernel (MSYS2 MinGW64)
+        shell: msys2 {0}
+        run: |
+          export PATH="/mingw64/bin:$PATH"
+          make all
+      - name: Archive kernel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurkern-windows
+          path: bin/aurkern.exe
+          if-no-files-found: error

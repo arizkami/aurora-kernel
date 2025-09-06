@@ -12,7 +12,7 @@ CFLAGS = -Wall -Wextra -Wno-unused-function -Wno-unused-variable -Wno-unused-par
 CFLAGS += -O2 -m64 -ffreestanding -nostdlib -nostdinc -fno-builtin -fno-stack-protector
 CFLAGS += -fno-exceptions -fno-rtti -fno-asynchronous-unwind-tables
 CFLAGS += -mno-red-zone -mno-mmx -mno-sse -mno-sse2
-CFLAGS += -Iinclude -DAURORA_KERNEL=1
+CFLAGS += -Iinclude -I/usr/x86_64-w64-mingw32/include -DAURORA_KERNEL=1
 
 # Linker flags for PE32+ kernel executable
 LDFLAGS = -m i386pep -nostdlib -T kernel.lds
@@ -31,6 +31,7 @@ RTLDIR = rtl
 BOOTDIR = boot
 EFIDIR = $(BOOTDIR)/efi
 LEGACYDIR = $(BOOTDIR)/legacy
+PROCDIR = proc
 
 # Target
 TARGET = $(BINDIR)/aurkern.exe
@@ -54,8 +55,31 @@ FS_SOURCES = $(FSDIR)/fs.c $(FSDIR)/fat32.c $(FSDIR)/exfat.c $(FSDIR)/ntfs.c
 # Runtime sources
 RTL_SOURCES = $(RTLDIR)/runtime.c $(RTLDIR)/aurora_runtime.c
 
+# Memory manager sources
+MEMDIR = mem
+MEM_SOURCES = $(MEMDIR)/mem.c
+MEM_ASM_SOURCES = $(MEMDIR)/amd64/flush.S
+
+# Process sources
+PROC_SOURCES = $(PROCDIR)/proc.c $(PROCDIR)/amd64/proc_arch.c
+PROC_ASM_SOURCES = $(PROCDIR)/amd64/enter_user.S
+
+# Configuration system sources
+CONFIGDIR = config
+HIVEDIR = $(CONFIGDIR)/hive
+NTCOREDIR = $(CONFIGDIR)/ntcore
+
+# Hive system sources
+HIVE_SOURCES = $(HIVEDIR)/hivebin.c $(HIVEDIR)/hivecell.c $(HIVEDIR)/hivechek.c \
+			   $(HIVEDIR)/hivefree.c $(HIVEDIR)/hivehint.c $(HIVEDIR)/hiveinit.c \
+			   $(HIVEDIR)/hiveload.c $(HIVEDIR)/hivemap.c $(HIVEDIR)/hivesum.c \
+			   $(HIVEDIR)/hivesync.c $(HIVEDIR)/hivelock.c $(HIVEDIR)/hiveops.c
+
+# NTCore API sources
+NTCORE_SOURCES = $(NTCOREDIR)/api.c
+
 # All source files (excluding entry point)
-SOURCES = $(WMI_SOURCES) $(WMI_ARCH_SOURCES) $(KERN_SOURCES) $(KERN_ARCH_SOURCES) $(FS_SOURCES) $(RTL_SOURCES)
+SOURCES = $(WMI_SOURCES) $(WMI_ARCH_SOURCES) $(KERN_SOURCES) $(KERN_ARCH_SOURCES) $(FS_SOURCES) $(RTL_SOURCES) $(MEM_SOURCES) $(MEM_ASM_SOURCES) $(PROC_SOURCES) $(PROC_ASM_SOURCES) $(HIVE_SOURCES) $(NTCORE_SOURCES)
 
 # Object files
 OBJECTS = $(WMI_SOURCES:%.c=$(OBJDIR)/%.o) \
@@ -63,13 +87,19 @@ OBJECTS = $(WMI_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(KERN_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(KERN_ARCH_SOURCES:%.c=$(OBJDIR)/%.o) \
 		  $(FS_SOURCES:%.c=$(OBJDIR)/%.o) \
-		  $(RTL_SOURCES:%.c=$(OBJDIR)/%.o)
+		  $(RTL_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(MEM_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(MEM_ASM_SOURCES:%.S=$(OBJDIR)/%.o) \
+		  $(PROC_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(PROC_ASM_SOURCES:%.S=$(OBJDIR)/%.o) \
+		  $(HIVE_SOURCES:%.c=$(OBJDIR)/%.o) \
+		  $(NTCORE_SOURCES:%.c=$(OBJDIR)/%.o)
 
 # All objects including entry point
 ALL_OBJECTS = $(ENTRY_OBJ) $(OBJECTS)
 
 # Default target
-all: $(TARGET) loader
+all: $(TARGET)
 
 # Create directories
 $(OBJDIR):
@@ -80,6 +110,13 @@ $(OBJDIR):
 	mkdir -p $(OBJDIR)/$(KERNDIR)/amd64
 	mkdir -p $(OBJDIR)/$(FSDIR)
 	mkdir -p $(OBJDIR)/$(RTLDIR)
+	mkdir -p $(OBJDIR)/$(MEMDIR)
+	mkdir -p $(OBJDIR)/$(MEMDIR)/amd64
+	mkdir -p $(OBJDIR)/$(PROCDIR)
+	mkdir -p $(OBJDIR)/$(PROCDIR)/amd64
+	mkdir -p $(OBJDIR)/$(CONFIGDIR)
+	mkdir -p $(OBJDIR)/$(HIVEDIR)
+	mkdir -p $(OBJDIR)/$(NTCOREDIR)
 
 $(BINDIR):
 	mkdir -p $(BINDIR)
@@ -120,6 +157,11 @@ $(KERNDIR)/entry.c:
 
 # Compile source files
 $(OBJDIR)/%.o: %.c | $(OBJDIR)
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Assemble .S files
+$(OBJDIR)/%.o: %.S | $(OBJDIR)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -171,9 +213,6 @@ EFILDFLAGS = -nostdlib -shared -Bsymbolic -T $(GNUEFI_DIR)/gnuefi/elf_x86_64_efi
 HOST_CC = gcc
 
 loader: $(LOADER_EFI) $(LOADER_ELF)
-
-$(EFILIB):
-	$(MAKE) -C $(GNUEFI_DIR)
 
 
 $(LOADER_EFI): $(EFIDIR)/loader.c $(EFILIB) | $(BINDIR) $(OBJDIR)

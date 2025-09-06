@@ -5,6 +5,8 @@
 
 #include "../aurora.h"
 #include "../include/kern.h"
+#include "../include/mem.h"
+#include "../include/proc.h"
 
 /* Global kernel state */
 static BOOL g_KernelInitialized = FALSE;
@@ -46,8 +48,20 @@ NTSTATUS KernInitialize(void)
     memset(g_ThreadTable, 0, sizeof(g_ThreadTable));
     memset(&g_SchedulerContext, 0, sizeof(g_SchedulerContext));
 
+    /* Initialize memory manager */
+    NTSTATUS status = MemInitialize();
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    /* Initialize process subsystem */
+    status = ProcInitialize();
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
     /* Initialize scheduler */
-    NTSTATUS status = KernInitializeScheduler();
+    status = KernInitializeScheduler();
     if (!NT_SUCCESS(status)) {
         return status;
     }
@@ -125,6 +139,13 @@ NTSTATUS KernCreateProcess(
     process->CreationTime = AuroraGetSystemTime();
     
     AuroraInitializeSpinLock(&process->ProcessLock);
+
+    /* Setup address space for the process */
+    NTSTATUS asStatus = ProcSetupAddressSpace(process);
+    if (!NT_SUCCESS(asStatus)) {
+        AuroraReleaseSpinLock(&g_ProcessTableLock, oldIrql);
+        return asStatus;
+    }
 
     *ProcessId = process->ProcessId;
     
@@ -246,7 +267,7 @@ NTSTATUS KernCreateThread(
     thread->ParentProcess = process;
     
     /* Allocate kernel stack */
-    thread->KernelStack = AuroraAllocatePool(KERNEL_STACK_SIZE);
+    thread->KernelStack = KernAllocateMemory(KERNEL_STACK_SIZE);
     if (!thread->KernelStack) {
         AuroraReleaseSpinLock(&g_ThreadTableLock, oldIrql);
         return STATUS_INSUFFICIENT_RESOURCES;
@@ -303,7 +324,7 @@ NTSTATUS KernTerminateThread(
 
     /* Free kernel stack */
     if (thread->KernelStack) {
-        AuroraFreePool(thread->KernelStack);
+        KernFreeMemory(thread->KernelStack);
         thread->KernelStack = NULL;
     }
 
@@ -363,22 +384,12 @@ VOID KernSwitchContext(IN PTHREAD OldThread, IN PTHREAD NewThread)
  */
 PVOID KernAllocateMemory(IN SIZE_T Size)
 {
-    /* Simple memory allocation implementation */
-    /* In a real kernel, this would use a proper memory allocator */
-    
-    /* For now, return NULL to indicate allocation failure */
-    /* This should be replaced with actual memory allocation */
-    return NULL;
+    return MemAlloc((size_t)Size);
 }
 
 VOID KernFreeMemory(IN PVOID Memory)
 {
-    /* Simple memory deallocation implementation */
-    /* In a real kernel, this would free the allocated memory */
-    
-    if (Memory) {
-        /* Placeholder - actual deallocation would happen here */
-    }
+    if (Memory) MemFree(Memory);
 }
 
 /*
